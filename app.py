@@ -16,7 +16,7 @@ import secrets
 
 # ============== КОНФИГУРАЦИЯ ==============
 TOKEN = os.getenv("BOT_TOKEN")
-DEVELOPER_IDS = [1304466064884891688]  # Замените на ваш Discord ID
+DEVELOPER_IDS = [123456789012345678]  # Замените на ваш Discord ID
 SERVER_INVITE = "https://discord.gg/hFtkGD9UhU"
 BOT_ACTIVITY_TEXT = "Регистрация персонажей"
 WEB_PORT = 3000
@@ -418,16 +418,6 @@ class ApplicationView(discord.ui.View):
 @bot.tree.command(name="registration", description="Открыть форму регистрации персонажа")
 async def registration(interaction: discord.Interaction):
     data = load_data()
-    guild_id = str(interaction.guild_id)
-    guild_data = data.get("guilds", {}).get(guild_id, {})
-    registration_channel = guild_data.get("registration_channel")
-    
-    if registration_channel and interaction.channel_id != registration_channel:
-        await interaction.response.send_message(
-            f"❌ Команда регистрации доступна только в канале <#{registration_channel}>!",
-            ephemeral=True
-        )
-        return
     
     if str(interaction.user.id) in data.get("registered_users", {}):
         await interaction.response.send_message(
@@ -443,6 +433,82 @@ async def registration(interaction: discord.Interaction):
 @bot.tree.command(name="регистрация", description="Открыть форму регистрации персонажа")
 async def registration_ru(interaction: discord.Interaction):
     await registration.callback(interaction)
+
+
+# ============== КОМАНДА ИНСТРУКЦИИ ==============
+@bot.tree.command(name="send_guide", description="Отправить инструкцию по регистрации")
+async def send_guide(interaction: discord.Interaction):
+    if not is_owner(interaction.user.id):
+        await interaction.response.send_message("❌ Только владельцы могут использовать эту команду!", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    # Проверяем наличие файлов
+    import os
+    files_exist = os.path.exists("Shag1.png") and os.path.exists("Shag2.png")
+    
+    # Embed заголовок
+    intro_embed = discord.Embed(
+        title="📖 Инструкция по регистрации персонажа",
+        description="Следуйте этим простым шагам, чтобы зарегистрировать своего персонажа на сервере.",
+        color=discord.Color.blue()
+    )
+    intro_embed.set_footer(text="Если у вас возникли вопросы — обратитесь к администрации")
+    await interaction.channel.send(embed=intro_embed)
+    
+    # Шаг 1
+    step1_embed = discord.Embed(
+        title="📌 Шаг 1: Введите команду",
+        description=(
+            "Введите команду `/registration` или `/регистрация` в любом текстовом канале.\n\n"
+            "После этого откроется форма для заполнения данных."
+        ),
+        color=discord.Color.green()
+    )
+    if files_exist and os.path.exists("Shag1.png"):
+        file1 = discord.File("Shag1.png", filename="Shag1.png")
+        step1_embed.set_image(url="attachment://Shag1.png")
+        await interaction.channel.send(embed=step1_embed, file=file1)
+    else:
+        await interaction.channel.send(embed=step1_embed)
+    
+    # Шаг 2
+    step2_embed = discord.Embed(
+        title="📌 Шаг 2: Заполните форму",
+        description=(
+            "В открывшейся форме заполните следующие поля:\n\n"
+            "**1. Полный никнейм на сервере**\n"
+            "└ Введите ваш игровой никнейм\n\n"
+            "**2. STEAM ID**\n"
+            "└ Ваш уникальный Steam идентификатор\n\n"
+            "**3. Ссылка на Google Doc с биографией**\n"
+            "└ Ссылка на документ с историей вашего персонажа\n\n"
+            "После заполнения нажмите кнопку **\"Отправить\"**"
+        ),
+        color=discord.Color.green()
+    )
+    if files_exist and os.path.exists("Shag2.png"):
+        file2 = discord.File("Shag2.png", filename="Shag2.png")
+        step2_embed.set_image(url="attachment://Shag2.png")
+        await interaction.channel.send(embed=step2_embed, file=file2)
+    else:
+        await interaction.channel.send(embed=step2_embed)
+    
+    # Финальный embed
+    final_embed = discord.Embed(
+        title="✅ Готово!",
+        description=(
+            "После отправки формы ваша заявка будет направлена на рассмотрение модераторам.\n\n"
+            "📬 Вы получите уведомление в личные сообщения о результате проверки.\n\n"
+            "⏳ Ожидайте — обычно проверка занимает не более 24 часов."
+        ),
+        color=discord.Color.gold()
+    )
+    await interaction.channel.send(embed=final_embed)
+    
+    await interaction.followup.send("✅ Инструкция успешно отправлена!", ephemeral=True)
+    add_log("send_guide", interaction.user, str(interaction.channel_id), "Инструкция отправлена")
 
 
 # ============== КОМАНДЫ НАСТРОЙКИ ==============
