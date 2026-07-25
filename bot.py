@@ -7,8 +7,11 @@ from datetime import datetime
 from typing import Optional
 
 # ============== КОНФИГУРАЦИЯ ==============
-TOKEN = "MTUzMDYyNTA3NTc4MTQzNTQ3Mw.G3sJ7j.wp1boHa1efikbrnlRrUBxhZV0fcqDNZfvLsgKU"  # Вставьте токен вашего бота
+TOKEN = os.getenv("BOT_TOKEN")  # Токен загружается из переменной окружения
 DEVELOPER_IDS = [123456789012345678]  # Замените на ваш Discord ID
+
+if not TOKEN:
+    raise ValueError("❌ Переменная окружения BOT_TOKEN не установлена!")
 
 # ============== БАЗА ДАННЫХ (JSON) ==============
 DATA_FILE = "bot_data.json"
@@ -629,4 +632,4 @@ async def on_guild_remove(guild):
 
 # ============== ЗАПУСК ==============
 if __name__ == "__main__":
-    bot.run(TOKEN)
+    
