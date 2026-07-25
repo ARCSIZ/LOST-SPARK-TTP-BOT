@@ -841,6 +841,14 @@ async def on_ready():
     await bot.change_presence(activity=activity, status=discord.Status.online)
     print(f"🎮 Статус установлен: {BOT_ACTIVITY_TEXT}")
     
+    # Очистка старых глобальных команд (убираем дубли)
+    try:
+        bot.tree.clear_commands(guild=None)
+        await bot.tree.sync()
+        print("🧹 Глобальные команды очищены")
+    except Exception as e:
+        print(f"⚠️ Ошибка очистки глобальных команд: {e}")
+    
     # Синхронизация команд для каждого сервера (мгновенная)
     try:
         for guild in bot.guilds:
