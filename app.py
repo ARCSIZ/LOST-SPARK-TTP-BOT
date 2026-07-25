@@ -841,6 +841,13 @@ async def on_ready():
     await bot.change_presence(activity=activity, status=discord.Status.online)
     print(f"🎮 Статус установлен: {BOT_ACTIVITY_TEXT}")
     
+    # Принудительное удаление глобальных команд (убираем дубли)
+    try:
+        await bot.http.bulk_upsert_global_commands(bot.application_id, payload=[])
+        print("🧹 Глобальные команды удалены")
+    except Exception as e:
+        print(f"⚠️ Ошибка очистки глобальных команд: {e}")
+    
     # Синхронизация команд для каждого сервера (мгновенная)
     try:
         for guild in bot.guilds:
@@ -849,14 +856,6 @@ async def on_ready():
             print(f"✅ Синхронизировано {len(synced)} команд для сервера: {guild.name}")
     except Exception as e:
         print(f"❌ Ошибка синхронизации: {e}")
-    
-    # Очистка глобальных команд (убираем дубли)
-    try:
-        bot.tree.clear_commands(guild=None)
-        await bot.tree.sync()
-        print("🧹 Глобальные дубли очищены")
-    except Exception as e:
-        print(f"⚠️ Ошибка очистки глобальных команд: {e}")
 
 
 @bot.event
