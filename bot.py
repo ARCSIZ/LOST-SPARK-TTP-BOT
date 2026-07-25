@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional
 
 # ============== КОНФИГУРАЦИЯ ==============
-TOKEN = "YOUR_BOT_TOKEN_HERE"  # Вставьте токен вашего бота
+TOKEN = "MTUzMDYyNTA3NTc4MTQzNTQ3Mw.G3sJ7j.wp1boHa1efikbrnlRrUBxhZV0fcqDNZfvLsgKU"  # Вставьте токен вашего бота
 DEVELOPER_IDS = [123456789012345678]  # Замените на ваш Discord ID
 
 # ============== БАЗА ДАННЫХ (JSON) ==============
