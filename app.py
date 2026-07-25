@@ -738,8 +738,10 @@ async def sync_commands(interaction: discord.Interaction):
         return
     
     await interaction.response.defer(ephemeral=True)
-    await bot.tree.sync()
-    await interaction.followup.send("✅ Команды синхронизированы!", ephemeral=True)
+    for guild in bot.guilds:
+        bot.tree.copy_global_to(guild=guild)
+        await bot.tree.sync(guild=guild)
+    await interaction.followup.send(f"✅ Команды синхронизированы для {len(bot.guilds)} серверов!", ephemeral=True)
 
 
 @bot.tree.command(name="bot_stats", description="Статистика бота")
@@ -839,9 +841,12 @@ async def on_ready():
     await bot.change_presence(activity=activity, status=discord.Status.online)
     print(f"🎮 Статус установлен: {BOT_ACTIVITY_TEXT}")
     
+    # Синхронизация команд для каждого сервера (мгновенная)
     try:
-        synced = await bot.tree.sync()
-        print(f"✅ Синхронизировано {len(synced)} команд")
+        for guild in bot.guilds:
+            bot.tree.copy_global_to(guild=guild)
+            synced = await bot.tree.sync(guild=guild)
+            print(f"✅ Синхронизировано {len(synced)} команд для сервера: {guild.name}")
     except Exception as e:
         print(f"❌ Ошибка синхронизации: {e}")
 
