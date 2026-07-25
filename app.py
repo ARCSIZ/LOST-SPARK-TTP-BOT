@@ -444,70 +444,35 @@ async def send_guide(interaction: discord.Interaction):
     
     await interaction.response.defer(ephemeral=True)
     
-    # Проверяем наличие файлов
-    import os
-    files_exist = os.path.exists("Shag1.png") and os.path.exists("Shag2.png")
-    
-    # Embed заголовок
-    intro_embed = discord.Embed(
+    # Embed с инструкцией
+    embed = discord.Embed(
         title="📖 Инструкция по регистрации персонажа",
-        description="Следуйте этим простым шагам, чтобы зарегистрировать своего персонажа на сервере.",
+        description=(
+            "Посмотрите видео ниже, чтобы узнать как зарегистрировать своего персонажа на сервере.\n\n"
+            "**Краткие шаги:**\n\n"
+            "**1.** Введите команду `/registration` или `/регистрация`\n\n"
+            "**2.** Заполните форму:\n"
+            "　• Полный никнейм на сервере\n"
+            "　• STEAM ID\n"
+            "　• Ссылка на Google Doc с биографией\n\n"
+            "**3.** Нажмите **\"Отправить\"** и ожидайте проверки\n\n"
+            "📬 Вы получите уведомление в ЛС о результате проверки."
+        ),
         color=discord.Color.blue()
     )
-    intro_embed.set_footer(text="Если у вас возникли вопросы — обратитесь к администрации")
-    await interaction.channel.send(embed=intro_embed)
+    embed.set_footer(text="Если у вас возникли вопросы — обратитесь к администрации")
     
-    # Шаг 1
-    step1_embed = discord.Embed(
-        title="📌 Шаг 1: Введите команду",
-        description=(
-            "Введите команду `/registration` или `/регистрация` в любом текстовом канале.\n\n"
-            "После этого откроется форма для заполнения данных."
-        ),
-        color=discord.Color.green()
-    )
-    if files_exist and os.path.exists("Shag1.png"):
-        file1 = discord.File("Shag1.png", filename="Shag1.png")
-        step1_embed.set_image(url="attachment://Shag1.png")
-        await interaction.channel.send(embed=step1_embed, file=file1)
+    # Отправляем embed
+    await interaction.channel.send(embed=embed)
+    
+    # Отправляем видео
+    if os.path.exists("video.mp4"):
+        video_file = discord.File("video.mp4", filename="video.mp4")
+        await interaction.channel.send(file=video_file)
+        await interaction.followup.send("✅ Инструкция с видео успешно отправлена!", ephemeral=True)
     else:
-        await interaction.channel.send(embed=step1_embed)
+        await interaction.followup.send("⚠️ Инструкция отправлена, но файл video.mp4 не найден!", ephemeral=True)
     
-    # Шаг 2
-    step2_embed = discord.Embed(
-        title="📌 Шаг 2: Заполните форму",
-        description=(
-            "В открывшейся форме заполните следующие поля:\n\n"
-            "**1. Полный никнейм на сервере**\n"
-            "└ Введите ваш игровой никнейм\n\n"
-            "**2. STEAM ID**\n"
-            "└ Ваш уникальный Steam идентификатор\n\n"
-            "**3. Ссылка на Google Doc с биографией**\n"
-            "└ Ссылка на документ с историей вашего персонажа\n\n"
-            "После заполнения нажмите кнопку **\"Отправить\"**"
-        ),
-        color=discord.Color.green()
-    )
-    if files_exist and os.path.exists("Shag2.png"):
-        file2 = discord.File("Shag2.png", filename="Shag2.png")
-        step2_embed.set_image(url="attachment://Shag2.png")
-        await interaction.channel.send(embed=step2_embed, file=file2)
-    else:
-        await interaction.channel.send(embed=step2_embed)
-    
-    # Финальный embed
-    final_embed = discord.Embed(
-        title="✅ Готово!",
-        description=(
-            "После отправки формы ваша заявка будет направлена на рассмотрение модераторам.\n\n"
-            "📬 Вы получите уведомление в личные сообщения о результате проверки.\n\n"
-            "⏳ Ожидайте — обычно проверка занимает не более 24 часов."
-        ),
-        color=discord.Color.gold()
-    )
-    await interaction.channel.send(embed=final_embed)
-    
-    await interaction.followup.send("✅ Инструкция успешно отправлена!", ephemeral=True)
     add_log("send_guide", interaction.user, str(interaction.channel_id), "Инструкция отправлена")
 
 
