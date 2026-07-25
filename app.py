@@ -1,302 +1,810 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Админ-панель | Зарегистрированные игроки</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        .scrollbar-thin::-webkit-scrollbar { width: 6px; }
-        .scrollbar-thin::-webkit-scrollbar-track { background: #1f2937; }
-        .scrollbar-thin::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
-    </style>
-</head>
-<body class="min-h-screen bg-gray-900 text-white">
-    <!-- Навбар -->
-    <nav class="bg-gray-800/80 backdrop-blur-xl border-b border-gray-700 sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center space-x-4">
-                    <div class="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        </svg>
-                    </div>
-                    <h1 class="text-xl font-bold">Админ-панель</h1>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <span class="text-gray-400 text-sm">Всего игроков: <span class="text-white font-semibold">{{ players|length }}</span></span>
-                    <a href="/logout" class="px-4 py-2 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg transition flex items-center space-x-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
-                        </svg>
-                        <span>Выйти</span>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </nav>
+import discord
+from discord import app_commands
+from discord.ext import commands
+import json
+import os
+from datetime import datetime
+from typing import Optional
+import threading
+import asyncio
+from fastapi import FastAPI, Request, Form, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
+import uvicorn
+import secrets
 
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Фильтры и поиск -->
-        <div class="bg-gray-800/50 backdrop-blur rounded-xl p-6 mb-6 border border-gray-700">
-            <div class="flex flex-col lg:flex-row gap-4">
-                <!-- Поиск -->
-                <div class="flex-1">
-                    <label class="block text-gray-400 text-sm mb-2">Поиск по никнейму</label>
-                    <div class="relative">
-                        <input type="text" id="searchInput" placeholder="Введите никнейм..." 
-                            class="w-full px-4 py-3 pl-10 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 transition">
-                        <svg class="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
-                    </div>
-                </div>
-                <!-- Фильтр по категории -->
-                <div class="lg:w-72">
-                    <label class="block text-gray-400 text-sm mb-2">Фильтр по категории</label>
-                    <select id="categoryFilter" 
-                        class="w-full px-4 py-3 bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500 transition">
-                        <option value="">Все категории</option>
-                        <option value="none">Без категории</option>
-                        {% for cat in categories %}
-                        <option value="{{ cat.id }}">{{ cat.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            
-            <!-- Категории (теги) -->
-            <div class="mt-4 flex flex-wrap gap-2">
-                <button onclick="filterByCategory('')" class="category-tag px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-full text-sm transition" data-category="">
-                    Все
-                </button>
-                {% for cat in categories %}
-                <button onclick="filterByCategory('{{ cat.id }}')" 
-                    class="category-tag px-3 py-1.5 rounded-full text-sm transition hover:opacity-80" 
-                    data-category="{{ cat.id }}"
-                    style="background-color: {{ cat.color }}20; color: {{ cat.color }}; border: 1px solid {{ cat.color }}50;">
-                    {{ cat.name }}
-                </button>
-                {% endfor %}
-            </div>
-        </div>
+# ============== КОНФИГУРАЦИЯ ==============
+TOKEN = os.getenv("BOT_TOKEN")
+DEVELOPER_IDS = [123456789012345678]  # Замените на ваш Discord ID
+SERVER_INVITE = "https://discord.gg/hFtkGD9UhU"
+BOT_ACTIVITY_TEXT = "Регистрация персонажей"
+WEB_PORT = 3000
 
-        <!-- Управление категориями -->
-        <div class="bg-gray-800/50 backdrop-blur rounded-xl p-6 mb-6 border border-gray-700">
-            <h2 class="text-lg font-semibold mb-4 flex items-center">
-                <svg class="w-5 h-5 mr-2 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
-                </svg>
-                Управление категориями
-            </h2>
-            <div class="flex flex-wrap gap-4">
-                <form id="addCategoryForm" class="flex gap-2 flex-wrap">
-                    <input type="text" id="newCategoryName" placeholder="Название категории" required
-                        class="px-4 py-2 bg-gray-700/50 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 transition">
-                    <input type="color" id="newCategoryColor" value="#6366F1" 
-                        class="w-12 h-10 rounded-lg cursor-pointer border border-gray-600">
-                    <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition flex items-center space-x-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                        </svg>
-                        <span>Добавить</span>
-                    </button>
-                </form>
-            </div>
-            <div class="mt-4 flex flex-wrap gap-2" id="categoryList">
-                {% for cat in categories %}
-                <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm" style="background-color: {{ cat.color }}20; border: 1px solid {{ cat.color }}50;">
-                    <span style="color: {{ cat.color }}">{{ cat.name }}</span>
-                    <button onclick="deleteCategory('{{ cat.id }}')" class="text-red-400 hover:text-red-300 transition">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                        </svg>
-                    </button>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
+# Админка
+ADMIN_LOGIN = "LOST-SPARK-TTP"
+ADMIN_PASSWORD = "A32DSAX-D3W22X-DWLVM3"
+SECRET_KEY = secrets.token_hex(32)
 
-        <!-- Таблица игроков -->
-        <div class="bg-gray-800/50 backdrop-blur rounded-xl border border-gray-700 overflow-hidden">
-            <div class="overflow-x-auto scrollbar-thin">
-                <table class="w-full">
-                    <thead class="bg-gray-700/50">
-                        <tr>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Игрок</th>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Steam ID</th>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Категория</th>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Дата регистрации</th>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Биография</th>
-                            <th class="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody id="playersTable" class="divide-y divide-gray-700">
-                        {% for user_id, player in players.items() %}
-                        <tr class="player-row hover:bg-gray-700/30 transition" 
-                            data-nickname="{{ player.nickname|lower }}" 
-                            data-category="{{ player.category or 'none' }}">
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="flex items-center">
-                                    <div class="w-10 h-10 bg-purple-600/30 rounded-full flex items-center justify-center text-purple-400 font-semibold">
-                                        {{ player.nickname[0]|upper }}
-                                    </div>
-                                    <div class="ml-4">
-                                        <div class="text-sm font-medium text-white">{{ player.nickname }}</div>
-                                        <div class="text-sm text-gray-400">ID: {{ user_id }}</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <code class="px-2 py-1 bg-gray-700 rounded text-sm text-green-400">{{ player.steam_id }}</code>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <select onchange="updateCategory('{{ user_id }}', this.value)" 
-                                    class="px-3 py-1.5 bg-gray-700/50 border border-gray-600 rounded-lg text-sm text-white focus:outline-none focus:border-purple-500 transition">
-                                    <option value="" {% if not player.category %}selected{% endif %}>Без категории</option>
-                                    {% for cat in categories %}
-                                    <option value="{{ cat.id }}" {% if player.category == cat.id %}selected{% endif %}>{{ cat.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-                                {{ player.registered_at[:10] if player.registered_at else 'N/A' }}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <a href="{{ player.google_doc }}" target="_blank" 
-                                    class="px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded-lg text-sm transition inline-flex items-center space-x-1">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-                                    </svg>
-                                    <span>Открыть</span>
-                                </a>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <button onclick="deletePlayer('{{ user_id }}')" 
-                                    class="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-lg text-sm transition inline-flex items-center space-x-1">
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                    </svg>
-                                    <span>Удалить</span>
-                                </button>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="6" class="px-6 py-12 text-center text-gray-400">
-                                <svg class="w-12 h-12 mx-auto mb-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                </svg>
-                                <p>Нет зарегистрированных игроков</p>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+# Категории по умолчанию
+DEFAULT_CATEGORIES = [
+    {"id": "highest", "name": "Высший состав", "color": "#FFD700"},
+    {"id": "sponsor", "name": "Спонсорка", "color": "#9B59B6"},
+    {"id": "helper", "name": "Хелперский состав", "color": "#3498DB"},
+    {"id": "middle", "name": "Средний состав", "color": "#2ECC71"},
+    {"id": "junior", "name": "Младший состав", "color": "#95A5A6"}
+]
 
-    <script>
-        // Поиск
-        document.getElementById('searchInput').addEventListener('input', filterPlayers);
-        document.getElementById('categoryFilter').addEventListener('change', filterPlayers);
+if not TOKEN:
+    raise ValueError("❌ Переменная окружения BOT_TOKEN не установлена!")
 
-        function filterPlayers() {
-            const search = document.getElementById('searchInput').value.toLowerCase();
-            const category = document.getElementById('categoryFilter').value;
-            
-            document.querySelectorAll('.player-row').forEach(row => {
-                const nickname = row.dataset.nickname;
-                const rowCategory = row.dataset.category;
-                
-                const matchesSearch = nickname.includes(search);
-                const matchesCategory = !category || rowCategory === category || (category === 'none' && rowCategory === 'none');
-                
-                row.style.display = matchesSearch && matchesCategory ? '' : 'none';
-            });
+# ============== БАЗА ДАННЫХ (JSON) ==============
+DATA_FILE = "bot_data.json"
+
+def load_data():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if "categories" not in data:
+                data["categories"] = DEFAULT_CATEGORIES
+            return data
+    return {
+        "guilds": {},
+        "registered_users": {},
+        "logs": [],
+        "moderators": [],
+        "admins": [],
+        "owners": [],
+        "categories": DEFAULT_CATEGORIES
+    }
+
+def save_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+# ============== FASTAPI ВЕБ-СЕРВЕР ==============
+web_app = FastAPI()
+web_app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+templates = Jinja2Templates(directory="templates")
+
+@web_app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    if not request.session.get("logged_in"):
+        return RedirectResponse(url="/login", status_code=302)
+    return RedirectResponse(url="/dashboard", status_code=302)
+
+@web_app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+
+@web_app.post("/login", response_class=HTMLResponse)
+async def login_submit(request: Request, login: str = Form(...), password: str = Form(...)):
+    if login == ADMIN_LOGIN and password == ADMIN_PASSWORD:
+        request.session["logged_in"] = True
+        return RedirectResponse(url="/dashboard", status_code=302)
+    return templates.TemplateResponse("login.html", {"request": request, "error": "Неверный логин или пароль"})
+
+@web_app.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/login", status_code=302)
+
+@web_app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    if not request.session.get("logged_in"):
+        return RedirectResponse(url="/login", status_code=302)
+    
+    data = load_data()
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "players": data.get("registered_users", {}),
+        "categories": data.get("categories", DEFAULT_CATEGORIES)
+    })
+
+# API маршруты
+@web_app.post("/api/player/category")
+async def update_player_category(request: Request):
+    if not request.session.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    body = await request.json()
+    data = load_data()
+    user_id = body.get("user_id")
+    category = body.get("category")
+    
+    if user_id in data.get("registered_users", {}):
+        data["registered_users"][user_id]["category"] = category
+        save_data(data)
+        return JSONResponse({"success": True})
+    
+    raise HTTPException(status_code=404, detail="User not found")
+
+@web_app.post("/api/player/delete")
+async def delete_player(request: Request):
+    if not request.session.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    body = await request.json()
+    data = load_data()
+    user_id = body.get("user_id")
+    
+    if user_id in data.get("registered_users", {}):
+        del data["registered_users"][user_id]
+        save_data(data)
+        return JSONResponse({"success": True})
+    
+    raise HTTPException(status_code=404, detail="User not found")
+
+@web_app.post("/api/category/add")
+async def add_category(request: Request):
+    if not request.session.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    body = await request.json()
+    data = load_data()
+    name = body.get("name")
+    color = body.get("color", "#6366F1")
+    
+    category_id = name.lower().replace(" ", "_")
+    
+    for cat in data.get("categories", []):
+        if cat["id"] == category_id:
+            raise HTTPException(status_code=400, detail="Category already exists")
+    
+    data["categories"].append({
+        "id": category_id,
+        "name": name,
+        "color": color
+    })
+    save_data(data)
+    return JSONResponse({"success": True})
+
+@web_app.post("/api/category/delete")
+async def delete_category(request: Request):
+    if not request.session.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    body = await request.json()
+    data = load_data()
+    category_id = body.get("category_id")
+    
+    data["categories"] = [c for c in data.get("categories", []) if c["id"] != category_id]
+    
+    for user_id in data.get("registered_users", {}):
+        if data["registered_users"][user_id].get("category") == category_id:
+            data["registered_users"][user_id]["category"] = None
+    
+    save_data(data)
+    return JSONResponse({"success": True})
+
+@web_app.get("/api/players")
+async def get_players(request: Request):
+    if not request.session.get("logged_in"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    data = load_data()
+    return JSONResponse(data.get("registered_users", {}))
+
+def run_web():
+    uvicorn.run(web_app, host="0.0.0.0", port=WEB_PORT, log_level="info")
+
+# ============== DISCORD БОТ ==============
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# ============== ЛОГИРОВАНИЕ ==============
+def add_log(action: str, user, target: str = None, details: str = None):
+    data = load_data()
+    log_entry = {
+        "timestamp": datetime.now().isoformat(),
+        "action": action,
+        "user_id": user.id if hasattr(user, 'id') else 0,
+        "user_name": str(user),
+        "target": target,
+        "details": details
+    }
+    data["logs"].append(log_entry)
+    save_data(data)
+
+# ============== ПРОВЕРКИ ПРАВ ==============
+def is_developer(user_id: int) -> bool:
+    return user_id in DEVELOPER_IDS
+
+def is_owner(user_id: int) -> bool:
+    data = load_data()
+    return user_id in data.get("owners", []) or is_developer(user_id)
+
+def is_admin(user_id: int) -> bool:
+    data = load_data()
+    return user_id in data.get("admins", []) or is_owner(user_id)
+
+def is_moderator(user_id: int) -> bool:
+    data = load_data()
+    return user_id in data.get("moderators", []) or is_admin(user_id)
+
+# ============== МОДАЛЬНЫЕ ОКНА ==============
+class RegistrationModal(discord.ui.Modal, title="Регистрация персонажа"):
+    nickname = discord.ui.TextInput(
+        label="Полный никнейм на сервере",
+        placeholder="Введите ваш никнейм...",
+        required=True,
+        max_length=100
+    )
+    
+    steam_id = discord.ui.TextInput(
+        label="STEAM ID",
+        placeholder="Например: STEAM_0:1:12345678",
+        required=True,
+        max_length=50
+    )
+    
+    google_doc = discord.ui.TextInput(
+        label="Ссылка на Google Doc с биографией",
+        placeholder="https://docs.google.com/...",
+        required=True,
+        max_length=500
+    )
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        data = load_data()
+        guild_id = str(interaction.guild_id)
+        user_id = str(interaction.user.id)
+        steam_id_value = self.steam_id.value.strip()
+        
+        if user_id in data.get("registered_users", {}):
+            await interaction.response.send_message(
+                "❌ Вы уже зарегистрировали персонажа! Повторная регистрация невозможна.",
+                ephemeral=True
+            )
+            return
+        
+        for uid, info in data.get("registered_users", {}).items():
+            if info.get("steam_id", "").lower() == steam_id_value.lower():
+                await interaction.response.send_message(
+                    "❌ Этот STEAM ID уже зарегистрирован!",
+                    ephemeral=True
+                )
+                return
+        
+        guild_data = data.get("guilds", {}).get(guild_id, {})
+        applications_channel_id = guild_data.get("applications_channel")
+        
+        if not applications_channel_id:
+            await interaction.response.send_message(
+                "❌ Канал для заявок не настроен! Обратитесь к администратору.",
+                ephemeral=True
+            )
+            return
+        
+        applications_channel = bot.get_channel(applications_channel_id)
+        if not applications_channel:
+            await interaction.response.send_message(
+                "❌ Канал для заявок не найден!",
+                ephemeral=True
+            )
+            return
+        
+        embed = discord.Embed(
+            title="📋 Новая заявка на регистрацию",
+            color=discord.Color.blue(),
+            timestamp=datetime.now()
+        )
+        embed.add_field(name="👤 Пользователь", value=f"{interaction.user.mention} ({interaction.user})", inline=False)
+        embed.add_field(name="🎮 Никнейм на сервере", value=self.nickname.value, inline=False)
+        embed.add_field(name="🆔 STEAM ID", value=steam_id_value, inline=False)
+        embed.add_field(name="📄 Биография", value=f"[Открыть Google Doc]({self.google_doc.value})", inline=False)
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
+        embed.set_footer(text=f"ID пользователя: {interaction.user.id}")
+        
+        view = ApplicationView(
+            user_id=interaction.user.id,
+            nickname=self.nickname.value,
+            steam_id=steam_id_value,
+            google_doc=self.google_doc.value
+        )
+        
+        await applications_channel.send(embed=embed, view=view)
+        await interaction.response.send_message(
+            "✅ Ваша заявка успешно отправлена на рассмотрение!",
+            ephemeral=True
+        )
+        
+        add_log("registration_submitted", interaction.user, steam_id_value, f"Никнейм: {self.nickname.value}")
+
+
+class RejectReasonModal(discord.ui.Modal, title="Причина отклонения"):
+    reason = discord.ui.TextInput(
+        label="Укажите причину отклонения",
+        placeholder="Введите причину...",
+        required=True,
+        style=discord.TextStyle.paragraph,
+        max_length=1000
+    )
+    
+    def __init__(self, user_id: int, steam_id: str, original_message: discord.Message):
+        super().__init__()
+        self.target_user_id = user_id
+        self.steam_id = steam_id
+        self.original_message = original_message
+    
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            user = await bot.fetch_user(self.target_user_id)
+            embed = discord.Embed(
+                title="❌ Заявка отклонена",
+                description="Ваша заявка на регистрацию персонажа была отклонена.",
+                color=discord.Color.red(),
+                timestamp=datetime.now()
+            )
+            embed.add_field(name="📝 Причина", value=self.reason.value, inline=False)
+            embed.add_field(name="👮 Модератор", value=str(interaction.user), inline=False)
+            await user.send(embed=embed)
+        except:
+            pass
+        
+        embed = self.original_message.embeds[0]
+        embed.color = discord.Color.red()
+        embed.add_field(name="❌ Статус", value=f"Отклонено модератором {interaction.user.mention}", inline=False)
+        embed.add_field(name="📝 Причина", value=self.reason.value, inline=False)
+        
+        await self.original_message.edit(embed=embed, view=None)
+        await interaction.response.send_message("✅ Заявка отклонена, пользователь уведомлен.", ephemeral=True)
+        
+        add_log("registration_rejected", interaction.user, str(self.target_user_id), f"Причина: {self.reason.value}")
+
+
+# ============== КНОПКИ ==============
+class ApplicationView(discord.ui.View):
+    def __init__(self, user_id: int, nickname: str, steam_id: str, google_doc: str):
+        super().__init__(timeout=None)
+        self.user_id = user_id
+        self.nickname = nickname
+        self.steam_id = steam_id
+        self.google_doc = google_doc
+    
+    @discord.ui.button(label="✅ Одобрить", style=discord.ButtonStyle.success)
+    async def approve(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not is_moderator(interaction.user.id):
+            await interaction.response.send_message("❌ У вас нет прав для этого действия!", ephemeral=True)
+            return
+        
+        data = load_data()
+        data["registered_users"][str(self.user_id)] = {
+            "nickname": self.nickname,
+            "steam_id": self.steam_id,
+            "google_doc": self.google_doc,
+            "registered_at": datetime.now().isoformat(),
+            "approved_by": interaction.user.id,
+            "category": None
         }
+        save_data(data)
+        
+        try:
+            user = await bot.fetch_user(self.user_id)
+            embed = discord.Embed(
+                title="✅ Заявка одобрена!",
+                description="Ваша заявка на регистрацию персонажа была одобрена!",
+                color=discord.Color.green(),
+                timestamp=datetime.now()
+            )
+            embed.add_field(name="🎮 Никнейм", value=self.nickname, inline=False)
+            embed.add_field(name="👮 Одобрил", value=str(interaction.user), inline=False)
+            await user.send(embed=embed)
+        except:
+            pass
+        
+        embed = interaction.message.embeds[0]
+        embed.color = discord.Color.green()
+        embed.add_field(name="✅ Статус", value=f"Одобрено модератором {interaction.user.mention}", inline=False)
+        
+        await interaction.message.edit(embed=embed, view=None)
+        await interaction.response.send_message("✅ Заявка одобрена, пользователь уведомлен.", ephemeral=True)
+        
+        add_log("registration_approved", interaction.user, str(self.user_id), f"Steam ID: {self.steam_id}")
+    
+    @discord.ui.button(label="❌ Отклонить", style=discord.ButtonStyle.danger)
+    async def reject(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not is_moderator(interaction.user.id):
+            await interaction.response.send_message("❌ У вас нет прав для этого действия!", ephemeral=True)
+            return
+        
+        modal = RejectReasonModal(self.user_id, self.steam_id, interaction.message)
+        await interaction.response.send_modal(modal)
 
-        function filterByCategory(category) {
-            document.getElementById('categoryFilter').value = category;
-            filterPlayers();
-        }
 
-        // Обновление категории игрока
-        async function updateCategory(userId, category) {
-            try {
-                const response = await fetch('/api/player/category', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: userId, category: category })
-                });
-                if (response.ok) {
-                    const row = document.querySelector(`select[onchange*="${userId}"]`).closest('tr');
-                    if (row) row.dataset.category = category || 'none';
-                }
-            } catch (e) {
-                console.error('Ошибка:', e);
-            }
-        }
+# ============== КОМАНДЫ РЕГИСТРАЦИИ ==============
+@bot.tree.command(name="registration", description="Открыть форму регистрации персонажа")
+async def registration(interaction: discord.Interaction):
+    data = load_data()
+    guild_id = str(interaction.guild_id)
+    guild_data = data.get("guilds", {}).get(guild_id, {})
+    registration_channel = guild_data.get("registration_channel")
+    
+    if registration_channel and interaction.channel_id != registration_channel:
+        await interaction.response.send_message(
+            f"❌ Команда регистрации доступна только в канале <#{registration_channel}>!",
+            ephemeral=True
+        )
+        return
+    
+    if str(interaction.user.id) in data.get("registered_users", {}):
+        await interaction.response.send_message(
+            "❌ Вы уже зарегистрировали персонажа! Повторная регистрация невозможна.",
+            ephemeral=True
+        )
+        return
+    
+    modal = RegistrationModal()
+    await interaction.response.send_modal(modal)
 
-        // Удаление игрока
-        async function deletePlayer(userId) {
-            if (!confirm('Вы уверены, что хотите удалить этого игрока?')) return;
-            
-            try {
-                const response = await fetch('/api/player/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: userId })
-                });
-                if (response.ok) {
-                    location.reload();
-                }
-            } catch (e) {
-                console.error('Ошибка:', e);
-            }
-        }
 
-        // Добавление категории
-        document.getElementById('addCategoryForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const name = document.getElementById('newCategoryName').value;
-            const color = document.getElementById('newCategoryColor').value;
-            
-            try {
-                const response = await fetch('/api/category/add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, color })
-                });
-                if (response.ok) {
-                    location.reload();
-                }
-            } catch (e) {
-                console.error('Ошибка:', e);
-            }
-        });
+@bot.tree.command(name="регистрация", description="Открыть форму регистрации персонажа")
+async def registration_ru(interaction: discord.Interaction):
+    await registration.callback(interaction)
 
-        // Удаление категории
-        async function deleteCategory(categoryId) {
-            if (!confirm('Вы уверены, что хотите удалить эту категорию?')) return;
-            
-            try {
-                const response = await fetch('/api/category/delete', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ category_id: categoryId })
-                });
-                if (response.ok) {
-                    location.reload();
-                }
-            } catch (e) {
-                console.error('Ошибка:', e);
-            }
-        }
-    </script>
-</body>
-</html>
+
+# ============== КОМАНДЫ НАСТРОЙКИ ==============
+@bot.tree.command(name="set_registration_channel", description="Установить канал для команды регистрации")
+@app_commands.describe(channel="Канал для регистрации")
+async def set_registration_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ Только администраторы могут использовать эту команду!", ephemeral=True)
+        return
+    
+    data = load_data()
+    guild_id = str(interaction.guild_id)
+    if guild_id not in data["guilds"]:
+        data["guilds"][guild_id] = {}
+    
+    data["guilds"][guild_id]["registration_channel"] = channel.id
+    save_data(data)
+    
+    await interaction.response.send_message(f"✅ Канал для регистрации установлен: {channel.mention}", ephemeral=True)
+    add_log("set_registration_channel", interaction.user, str(channel.id), channel.name)
+
+
+@bot.tree.command(name="set_applications_channel", description="Установить канал для заявок")
+@app_commands.describe(channel="Канал для заявок")
+async def set_applications_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ Только администраторы могут использовать эту команду!", ephemeral=True)
+        return
+    
+    data = load_data()
+    guild_id = str(interaction.guild_id)
+    if guild_id not in data["guilds"]:
+        data["guilds"][guild_id] = {}
+    
+    data["guilds"][guild_id]["applications_channel"] = channel.id
+    save_data(data)
+    
+    await interaction.response.send_message(f"✅ Канал для заявок установлен: {channel.mention}", ephemeral=True)
+    add_log("set_applications_channel", interaction.user, str(channel.id), channel.name)
+
+
+# ============== КОМАНДЫ МОДЕРАТОРА ==============
+@bot.tree.command(name="delete_character", description="Удалить персонажа по Steam ID")
+@app_commands.describe(steam_id="STEAM ID персонажа для удаления")
+async def delete_character(interaction: discord.Interaction, steam_id: str):
+    if not is_moderator(interaction.user.id):
+        await interaction.response.send_message("❌ Только модераторы могут использовать эту команду!", ephemeral=True)
+        return
+    
+    data = load_data()
+    user_to_delete = None
+    for user_id, info in data.get("registered_users", {}).items():
+        if info.get("steam_id", "").lower() == steam_id.lower():
+            user_to_delete = user_id
+            break
+    
+    if not user_to_delete:
+        await interaction.response.send_message(f"❌ Персонаж с Steam ID `{steam_id}` не найден!", ephemeral=True)
+        return
+    
+    deleted_info = data["registered_users"].pop(user_to_delete)
+    save_data(data)
+    
+    await interaction.response.send_message(
+        f"✅ Персонаж удалён!\n"
+        f"👤 Никнейм: {deleted_info['nickname']}\n"
+        f"🆔 Steam ID: {deleted_info['steam_id']}",
+        ephemeral=True
+    )
+    add_log("character_deleted", interaction.user, steam_id, f"Никнейм: {deleted_info['nickname']}")
+
+
+# ============== КОМАНДЫ АДМИНИСТРАТОРА ==============
+@bot.tree.command(name="add_moderator", description="Выдать права модератора")
+@app_commands.describe(user="Пользователь для выдачи прав")
+async def add_moderator(interaction: discord.Interaction, user: discord.User):
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ Только администраторы могут использовать эту команду!", ephemeral=True)
+        return
+    
+    data = load_data()
+    if user.id in data["moderators"]:
+        await interaction.response.send_message(f"❌ {user.mention} уже является модератором!", ephemeral=True)
+        return
+    
+    data["moderators"].append(user.id)
+    save_data(data)
+    
+    await interaction.response.send_message(f"✅ {user.mention} теперь модератор!", ephemeral=True)
+    add_log("moderator_added", interaction.user, str(user.id), str(user))
+
+
+@bot.tree.command(name="remove_moderator", description="Снять права модератора")
+@app_commands.describe(user="Пользователь для снятия прав")
+async def remove_moderator(interaction: discord.Interaction, user: discord.User):
+    if not is_admin(interaction.user.id):
+        await interaction.response.send_message("❌ Только администраторы могут использовать эту команду!", ephemeral=True)
+        return
+    
+    data = load_data()
+    if user.id not in data["moderators"]:
+        await interaction.response.send_message(f"❌ {user.mention} не является модератором!", ephemeral=True)
+        return
+    
+    data["moderators"].remove(user.id)
+    save_data(data)
+    
+    await interaction.response.send_message(f"✅ {user.mention} больше не модератор!", ephemeral=True)
+    add_log("moderator_removed", interaction.user, str(user.id), str(user))
+
+
+# ============== КОМАНДЫ ВЛАДЕЛЬЦА ==============
+@bot.tree.command(name="view_logs", description="Просмотр логов действий")
+@app_commands.describe(limit="Количество записей для просмотра (по умолчанию 20)")
+async def view_logs(interaction: discord.Interaction, limit: Optional[int] = 20):
+    if not is_owner(interaction.user.id):
+        await interaction.response.send_message("❌ Только владельцы могут использовать эту команду!", ephemeral=True)
+        return
+    
+    data = load_data()
+    logs = data.get("logs", [])[-limit:]
+    
+    if not logs:
+        await interaction.response.send_message("📋 Логи пусты.", ephemeral=True)
+        return
+    
+    embed = discord.Embed(
+        title="📋 Логи действий",
+        color=discord.Color.blue(),
+        timestamp=datetime.now()
+    )
+    
+    log_text = ""
+    for log in reversed(logs):
+        timestamp = log.get("timestamp", "N/A")[:10]
+        action = log.get("action", "N/A")
+        user_name = log.get("user_name", "N/A")
+        details = log.get("details", "")
+        log_text += f"`{timestamp}` **{action}** - {user_name}\n"
+        if details:
+            log_text += f"  └ {details}\n"
+    
+    if len(log_text) > 4000:
+        log_text = log_text[:4000] + "..."
+    
+    embed.description = log_text
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="add_admin", description="Выдать права администратора")
+@app_commands.describe(user="Пользователь для выдачи прав")
+async def add_admin(interaction: discord.Interaction, user: discord.User):
+    if not is_owner(interaction.user.id):
+        await interaction.response.send_message("❌ Только владельцы могут использовать эту команду!", ephemeral=True)
+        return
+    
+    data = load_data()
+    if user.id in data["admins"]:
+        await interaction.response.send_message(f"❌ {user.mention} уже является администратором!", ephemeral=True)
+        return
+    
+    data["admins"].append(user.id)
+    save_data(data)
+    
+    await interaction.response.send_message(f"✅ {user.mention} теперь администратор!", ephemeral=True)
+    add_log("admin_added", interaction.user, str(user.id), str(user))
+
+
+@bot.tree.command(name="remove_admin", description="Снять права администратора")
+@app_commands.describe(user="Пользователь для снятия прав")
+async def remove_admin(interaction: discord.Interaction, user: discord.User):
+    if not is_owner(interaction.user.id):
+        await interaction.response.send_message("❌ Только владельцы могут использовать эту команду!", ephemeral=True)
+        return
+    
+    data = load_data()
+    if user.id not in data["admins"]:
+        await interaction.response.send_message(f"❌ {user.mention} не является администратором!", ephemeral=True)
+        return
+    
+    data["admins"].remove(user.id)
+    save_data(data)
+    
+    await interaction.response.send_message(f"✅ {user.mention} больше не администратор!", ephemeral=True)
+    add_log("admin_removed", interaction.user, str(user.id), str(user))
+
+
+# ============== КОМАНДЫ РАЗРАБОТЧИКА ==============
+@bot.tree.command(name="add_owner", description="Выдать права владельца")
+@app_commands.describe(user="Пользователь для выдачи прав")
+async def add_owner(interaction: discord.Interaction, user: discord.User):
+    if not is_developer(interaction.user.id):
+        await interaction.response.send_message("❌ Только разработчики могут использовать эту команду!", ephemeral=True)
+        return
+    
+    data = load_data()
+    if user.id in data["owners"]:
+        await interaction.response.send_message(f"❌ {user.mention} уже является владельцем!", ephemeral=True)
+        return
+    
+    data["owners"].append(user.id)
+    save_data(data)
+    
+    await interaction.response.send_message(f"✅ {user.mention} теперь владелец!", ephemeral=True)
+    add_log("owner_added", interaction.user, str(user.id), str(user))
+
+
+@bot.tree.command(name="remove_owner", description="Снять права владельца")
+@app_commands.describe(user="Пользователь для снятия прав")
+async def remove_owner(interaction: discord.Interaction, user: discord.User):
+    if not is_developer(interaction.user.id):
+        await interaction.response.send_message("❌ Только разработчики могут использовать эту команду!", ephemeral=True)
+        return
+    
+    data = load_data()
+    if user.id not in data["owners"]:
+        await interaction.response.send_message(f"❌ {user.mention} не является владельцем!", ephemeral=True)
+        return
+    
+    data["owners"].remove(user.id)
+    save_data(data)
+    
+    await interaction.response.send_message(f"✅ {user.mention} больше не владелец!", ephemeral=True)
+    add_log("owner_removed", interaction.user, str(user.id), str(user))
+
+
+@bot.tree.command(name="sync", description="Синхронизировать команды бота")
+async def sync_commands(interaction: discord.Interaction):
+    if not is_developer(interaction.user.id):
+        await interaction.response.send_message("❌ Только разработчики могут использовать эту команду!", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    await bot.tree.sync()
+    await interaction.followup.send("✅ Команды синхронизированы!", ephemeral=True)
+
+
+@bot.tree.command(name="bot_stats", description="Статистика бота")
+async def bot_stats(interaction: discord.Interaction):
+    if not is_developer(interaction.user.id):
+        await interaction.response.send_message("❌ Только разработчики могут использовать эту команду!", ephemeral=True)
+        return
+    
+    data = load_data()
+    embed = discord.Embed(
+        title="📊 Статистика бота",
+        color=discord.Color.gold(),
+        timestamp=datetime.now()
+    )
+    embed.add_field(name="🏠 Серверов", value=len(bot.guilds), inline=True)
+    embed.add_field(name="👥 Пользователей", value=sum(g.member_count for g in bot.guilds), inline=True)
+    embed.add_field(name="📋 Зарегистрировано", value=len(data.get("registered_users", {})), inline=True)
+    embed.add_field(name="👮 Модераторов", value=len(data.get("moderators", [])), inline=True)
+    embed.add_field(name="🛡️ Администраторов", value=len(data.get("admins", [])), inline=True)
+    embed.add_field(name="👑 Владельцев", value=len(data.get("owners", [])), inline=True)
+    embed.add_field(name="📜 Записей в логах", value=len(data.get("logs", [])), inline=True)
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="list_staff", description="Список всего персонала")
+async def list_staff(interaction: discord.Interaction):
+    if not is_moderator(interaction.user.id):
+        await interaction.response.send_message("❌ У вас нет прав для этого действия!", ephemeral=True)
+        return
+    
+    data = load_data()
+    embed = discord.Embed(
+        title="👥 Список персонала",
+        color=discord.Color.blue(),
+        timestamp=datetime.now()
+    )
+    
+    devs = [f"<@{uid}>" for uid in DEVELOPER_IDS]
+    embed.add_field(name="🔧 Разработчики", value="\n".join(devs) if devs else "Нет", inline=False)
+    
+    owners = [f"<@{uid}>" for uid in data.get("owners", [])]
+    embed.add_field(name="👑 Владельцы", value="\n".join(owners) if owners else "Нет", inline=False)
+    
+    admins = [f"<@{uid}>" for uid in data.get("admins", [])]
+    embed.add_field(name="🛡️ Администраторы", value="\n".join(admins) if admins else "Нет", inline=False)
+    
+    mods = [f"<@{uid}>" for uid in data.get("moderators", [])]
+    embed.add_field(name="👮 Модераторы", value="\n".join(mods) if mods else "Нет", inline=False)
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@bot.tree.command(name="registered_list", description="Список зарегистрированных персонажей")
+async def registered_list(interaction: discord.Interaction):
+    if not is_moderator(interaction.user.id):
+        await interaction.response.send_message("❌ У вас нет прав для этого действия!", ephemeral=True)
+        return
+    
+    data = load_data()
+    registered = data.get("registered_users", {})
+    
+    if not registered:
+        await interaction.response.send_message("📋 Нет зарегистрированных персонажей.", ephemeral=True)
+        return
+    
+    embed = discord.Embed(
+        title="📋 Зарегистрированные персонажи",
+        color=discord.Color.green(),
+        timestamp=datetime.now()
+    )
+    
+    description = ""
+    for user_id, info in list(registered.items())[:25]:
+        description += f"<@{user_id}> - **{info['nickname']}**\n└ Steam ID: `{info['steam_id']}`\n\n"
+    
+    if len(registered) > 25:
+        description += f"... и ещё {len(registered) - 25} персонажей"
+    
+    embed.description = description
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+# ============== СОБЫТИЯ ==============
+@bot.event
+async def on_ready():
+    print(f"✅ Бот {bot.user} запущен!")
+    print(f"📊 Серверов: {len(bot.guilds)}")
+    print(f"🌐 Веб-панель: http://localhost:{WEB_PORT}")
+    print(f"🔗 Ссылка для приглашения:")
+    print(f"https://discord.com/api/oauth2/authorize?client_id={bot.user.id}&permissions=8&scope=bot%20applications.commands")
+    
+    activity = discord.Streaming(
+        name=BOT_ACTIVITY_TEXT,
+        url=SERVER_INVITE
+    )
+    await bot.change_presence(activity=activity, status=discord.Status.online)
+    print(f"🎮 Статус установлен: {BOT_ACTIVITY_TEXT}")
+    
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Синхронизировано {len(synced)} команд")
+    except Exception as e:
+        print(f"❌ Ошибка синхронизации: {e}")
+
+
+@bot.event
+async def on_guild_join(guild):
+    print(f"➕ Бот добавлен на сервер: {guild.name}")
+    add_log("guild_join", bot.user, str(guild.id), guild.name)
+
+
+@bot.event
+async def on_guild_remove(guild):
+    print(f"➖ Бот удалён с сервера: {guild.name}")
+
+
+# ============== ЗАПУСК ==============
+def run_bot():
+    bot.run(TOKEN)
+
+if __name__ == "__main__":
+    # Запуск веб-сервера в отдельном потоке
+    web_thread = threading.Thread(target=run_web, daemon=True)
+    web_thread.start()
+    print(f"🌐 Веб-сервер запущен на порту {WEB_PORT}")
+    
+    # Запуск Discord бота
+    run_bot()
