@@ -16,7 +16,7 @@ import secrets
 
 # ============== КОНФИГУРАЦИЯ ==============
 TOKEN = os.getenv("BOT_TOKEN")
-DEVELOPER_IDS = [123456789012345678]  # Замените на ваш Discord ID
+DEVELOPER_IDS = [1304466064884891688]  # Замените на ваш Discord ID
 SERVER_INVITE = "https://discord.gg/hFtkGD9UhU"
 BOT_ACTIVITY_TEXT = "Регистрация персонажей"
 WEB_PORT = 3000
