@@ -9,6 +9,8 @@ from typing import Optional
 # ============== КОНФИГУРАЦИЯ ==============
 TOKEN = os.getenv("BOT_TOKEN")  # Токен загружается из переменной окружения
 DEVELOPER_IDS = [123456789012345678]  # Замените на ваш Discord ID
+SERVER_INVITE = "https://discord.gg/hFtkGD9UhU"  # Ссылка на сервер
+BOT_ACTIVITY_TEXT = "Регистрация персонажей"  # Текст статуса "Играет в ..."
 
 if not TOKEN:
     raise ValueError("❌ Переменная окружения BOT_TOKEN не установлена!")
@@ -611,6 +613,14 @@ async def on_ready():
     print(f"🔗 Ссылка для приглашения:")
     print(f"https://discord.com/api/oauth2/authorize?client_id={bot.user.id}&permissions=8&scope=bot%20applications.commands")
     
+    # Установка статуса "Играет в ..." с кнопкой
+    activity = discord.Streaming(
+        name=BOT_ACTIVITY_TEXT,
+        url=SERVER_INVITE
+    )
+    await bot.change_presence(activity=activity, status=discord.Status.online)
+    print(f"🎮 Статус установлен: {BOT_ACTIVITY_TEXT}")
+    
     # Синхронизация команд при запуске
     try:
         synced = await bot.tree.sync()
@@ -632,4 +642,4 @@ async def on_guild_remove(guild):
 
 # ============== ЗАПУСК ==============
 if __name__ == "__main__":
-    
+    bot.run(TOKEN)
